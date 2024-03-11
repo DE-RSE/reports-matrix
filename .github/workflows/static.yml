@@ -18,6 +18,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v4
+      - run: sudo apt-get install -y python3-matplotlib
       - run: mkdir -p public
       - run: ./plot_counter.py matrixcounter.json -o public/matrixcounter.pdf
       - name: Upload artifact
