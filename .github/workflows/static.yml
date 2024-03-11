@@ -20,7 +20,7 @@ jobs:
         uses: actions/configure-pages@v4
       - run: sudo apt-get install -y python3-matplotlib
       - run: mkdir -p public
-      - run: ./plot_counter.py matrixcounter.json -o public/matrixcounter.pdf
+      - run: ./plot_counter.py matrixcounter.json -o public/matrixcounter.svg
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
