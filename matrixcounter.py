@@ -32,7 +32,7 @@ from datetime import datetime
 
 import requests
 
-# sceleton for data scructure for internal state
+# skeleton for data scructure for internal state
 status_empty = {
     'matrix_access_tokens': {},
     'rooms': {},
