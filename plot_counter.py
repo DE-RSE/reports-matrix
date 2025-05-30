@@ -22,7 +22,7 @@ __email__ = "frank.loeffler@uni-jena.de"
 __license__ = "AGPLv3"
 __maintainer__ = "frank.loeffler@uni-jena.de"
 __status__ = "Development"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 import sys, os
 from pprint import pprint
@@ -53,7 +53,7 @@ except:
     print(f'cannot read data in {args["file"]}')
     sys.exit(1)
 
-scaling = .6
+scaling = .8
 fig = plt.figure(figsize=(16*scaling, 9*scaling))
 ax = fig.subplots()
 
@@ -61,24 +61,26 @@ xmin=datetime.fromisoformat('2999-01-01T00:00:00')
 xmax=datetime.fromisoformat('1999-01-01T00:00:00')
 
 # go through all rooms and sort by current (last) user count
-for room, roomdata in sorted(data['rooms'].items(), key=lambda x: x[1]['counts'][1][-1]):
+for room, roomdata in sorted(data['rooms'].items(), key=lambda x: list(x[1]['counts'].values())[-1]):
     # exclude a few rooms; TODO: already do not include those numbers in the collected data
     if roomdata['name'].startswith('deRSE-test'):
+        continue
+    if roomdata['name'].startswith('deRSE-enc-test'):
         continue
     if roomdata['name'].startswith('deRSE-alt'):
         continue
     if roomdata['name'].startswith('de-RSE-alt'):
         continue
     # convert data to the right types for plotting
-    times  = [datetime.fromisoformat(s) for s in roomdata['counts'][0]]
-    counts = roomdata['counts'][1]
+    times  = [datetime.fromisoformat(s) for s in list(roomdata['counts'].keys())]
+    counts = list(roomdata['counts'].values())
     # add one more "fake" datapoint, as stairs() requires len(edges) = len(data)+1
     times.append(times[-1])
     # get global extrema as limits later
     xmin = min(xmin, times[0])
     xmax = max(xmax, times[-1])
     # the actual plot line
-    ax.stairs(counts, edges=times, lw=2, label=roomdata['name'])
+    ax.stairs(counts, edges=times, lw=1, label=roomdata['name'])
 
 # limit to the observed time range and ensure ymin to be 0
 ax.set_xlim(xmin=xmin, xmax=xmax)

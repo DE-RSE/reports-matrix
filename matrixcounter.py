@@ -22,9 +22,11 @@ __email__ = "frank.loeffler@uni-jena.de"
 __license__ = "AGPLv3"
 __maintainer__ = "frank.loeffler@uni-jena.de"
 __status__ = "Development"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 import sys, os
+# we assume sorted dicts
+assert sys.version_info >= (3, 7)
 import argparse
 import json
 from pprint import pprint
@@ -36,6 +38,7 @@ import requests
 status_empty = {
     'matrix_access_tokens': {},
     'rooms': {},
+    'version': tuple(int(x) for x in __version__.split('.')),
     }
 # global state, to be saved between invocations
 status = None
@@ -113,14 +116,24 @@ def load_status(statusfile_name):
     try:
         statusfile = open(statusfile_name, 'r')
         status = json.load(statusfile)
-        close(statusfile_name)
+        statusfile.close()
     except Exception as e:
+        print("Exception reading old status: ignoring")
+        print(e)
         pass
+    if 'version' in status:
+        status['version'] = tuple(status['version'])
+    else:
+        status['version'] = (0, 0, 1)
+    if status['version'] == (0, 0, 1):
+        for room, data in status['rooms'].items():
+            status['rooms'][room]['counts'] = dict(zip(data['counts'][0], data['counts'][1]))
+        status['version'] = status_empty['version']
     if type(status) != dict:
         status = status_empty
     for req_key in status_empty.keys():
         if req_key not in status:
-            status = status_empty
+            status[req_key] = status_empty[req_key]
     if type(status['matrix_access_tokens']) != dict:
         status['matrix_access_tokens'] = status_empty['matrix_access_tokens']
     matrix_access_token_id = f'{matrix_user}@{matrix_host}'
@@ -202,7 +215,7 @@ def login_matrix():
 
 matrix = login_matrix()
 
-def add_data(dates, values, date, value):
+def add_data(counts, date, value):
     """append 'date' to 'dates' and 'value' to 'values' or only update last 'dates'
 
     We mostly do not want to record when nothing changed. Thus, this function updates
@@ -214,16 +227,13 @@ def add_data(dates, values, date, value):
     result would need to use implicit knowledge on the intervals this script is run, and I
     would rather not do that to keep things simple and consistent.
     """
-    if len(dates) != len(values):
-        print('internal error')
-        sys.exit(1)
     # if nothing changed, only update the last-seen time
-    if len(dates) > 1 and value == values[-1] and value == values[-2]:
-        dates[-1] = date
+    if len(counts) > 1 and value == list(counts.values())[-1] and value == list(counts.values())[-2]:
+        del counts[list(counts.keys())[-1]]
+        counts[date] = value
     # else, add a new data point
     else:
-        dates.append(date)
-        values.append(value)
+        counts[date] = value
 
 # get list of joined rooms and then get info for each
 s = requests.Session()
@@ -248,15 +258,13 @@ for room_id in json.loads(r.text)['joined_rooms']:
             if r.status_code != 200:
                 continue
             room_name = json.loads(r.text)['name']
-            status['rooms'][room_id] = {'name': room_name, 'counts': [[], []]}
-        add_data(status['rooms'][room_id]['counts'][0],
-                 status['rooms'][room_id]['counts'][1],
+            status['rooms'][room_id] = {'name': room_name, 'counts': {}}
+        add_data(status['rooms'][room_id]['counts'],
                  isodate, len(users)-1) # subtract 1 to exclude this user (supposedly a bot)
         unique_users |= users
 if not 'total' in status['rooms']:
-    status['rooms']['total'] = {'name': 'Total', 'counts': [[], []]}
-add_data(status['rooms']['total']['counts'][0],
-         status['rooms']['total']['counts'][1],
+    status['rooms']['total'] = {'name': 'Total', 'counts': {}}
+add_data(status['rooms']['total']['counts'],
          isodate, len(unique_users)-1)
 
 if config['matrix_always_logout']:
@@ -271,7 +279,7 @@ try:
     file_desc = os.open(path=statusfile_name,
                         flags=os.O_WRONLY|os.O_CREAT|os.O_TRUNC, mode=0o600)
     statusfile = open(file_desc, 'w')
-    json.dump(status, statusfile)
+    json.dump(status, statusfile, indent=0, separators=(',',':'))
     statusfile.close()
 except Exception as e:
     print(e)
@@ -280,6 +288,9 @@ except Exception as e:
 # save counters. This is the same file format as the state, but only contains the counters
 # and especially no authorization information
 with open(counterfile_name, 'w') as counterfile:
-    json.dump({'rooms': status['rooms']}, counterfile, indent=0, separators=(',',':'))
+    json.dump({'rooms': status['rooms'],
+               'version': status['version'],
+              },
+              counterfile, indent=0, separators=(',',':'))
     counterfile.close()
 
